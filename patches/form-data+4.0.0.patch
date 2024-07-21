@@ -1,0 +1,294 @@
+diff --git a/node_modules/form-data/lib/form_data.js b/node_modules/form-data/lib/form_data.js
+index 18dc819..a285dac 100644
+--- a/node_modules/form-data/lib/form_data.js
++++ b/node_modules/form-data/lib/form_data.js
+@@ -44,13 +44,13 @@ function FormData(options) {
+ FormData.LINE_BREAK = '\r\n';
+ FormData.DEFAULT_CONTENT_TYPE = 'application/octet-stream';
+ 
+-FormData.prototype.append = function(field, value, options) {
++FormData.prototype.append = function (field, value, options) {
+ 
+   options = options || {};
+ 
+   // allow filename as single option
+   if (typeof options == 'string') {
+-    options = {filename: options};
++    options = { filename: options };
+   }
+ 
+   var append = CombinedStream.prototype.append.bind(this);
+@@ -61,7 +61,7 @@ FormData.prototype.append = function(field, value, options) {
+   }
+ 
+   // https://github.com/felixge/node-form-data/issues/38
+-  if (util.isArray(value)) {
++  if (Array.isArray(value)) {
+     // Please convert your array into string
+     // the way web server expects it
+     this._error(new Error('Arrays are not supported.'));
+@@ -79,7 +79,7 @@ FormData.prototype.append = function(field, value, options) {
+   this._trackLength(header, value, options);
+ };
+ 
+-FormData.prototype._trackLength = function(header, value, options) {
++FormData.prototype._trackLength = function (header, value, options) {
+   var valueLength = 0;
+ 
+   // used w/ getLengthSync(), when length is known.
+@@ -102,7 +102,7 @@ FormData.prototype._trackLength = function(header, value, options) {
+     FormData.LINE_BREAK.length;
+ 
+   // empty or either doesn't have path or not an http response or not a stream
+-  if (!value || ( !value.path && !(value.readable && value.hasOwnProperty('httpVersion')) && !(value instanceof Stream))) {
++  if (!value || (!value.path && !(value.readable && value.hasOwnProperty('httpVersion')) && !(value instanceof Stream))) {
+     return;
+   }
+ 
+@@ -112,7 +112,7 @@ FormData.prototype._trackLength = function(header, value, options) {
+   }
+ };
+ 
+-FormData.prototype._lengthRetriever = function(value, callback) {
++FormData.prototype._lengthRetriever = function (value, callback) {
+ 
+   if (value.hasOwnProperty('fd')) {
+ 
+@@ -130,10 +130,10 @@ FormData.prototype._lengthRetriever = function(value, callback) {
+       // inclusive, starts with 0
+       callback(null, value.end + 1 - (value.start ? value.start : 0));
+ 
+-    // not that fast snoopy
++      // not that fast snoopy
+     } else {
+       // still need to fetch file size from fs
+-      fs.stat(value.path, function(err, stat) {
++      fs.stat(value.path, function (err, stat) {
+ 
+         var fileSize;
+ 
+@@ -148,26 +148,26 @@ FormData.prototype._lengthRetriever = function(value, callback) {
+       });
+     }
+ 
+-  // or http response
++    // or http response
+   } else if (value.hasOwnProperty('httpVersion')) {
+     callback(null, +value.headers['content-length']);
+ 
+-  // or request stream http://github.com/mikeal/request
++    // or request stream http://github.com/mikeal/request
+   } else if (value.hasOwnProperty('httpModule')) {
+     // wait till response come back
+-    value.on('response', function(response) {
++    value.on('response', function (response) {
+       value.pause();
+       callback(null, +response.headers['content-length']);
+     });
+     value.resume();
+ 
+-  // something else
++    // something else
+   } else {
+     callback('Unknown stream');
+   }
+ };
+ 
+-FormData.prototype._multiPartHeader = function(field, value, options) {
++FormData.prototype._multiPartHeader = function (field, value, options) {
+   // custom header specified (as string)?
+   // it becomes responsible for boundary
+   // (e.g. to handle extra CRLFs on .NET servers)
+@@ -179,7 +179,7 @@ FormData.prototype._multiPartHeader = function(field, value, options) {
+   var contentType = this._getContentType(value, options);
+ 
+   var contents = '';
+-  var headers  = {
++  var headers = {
+     // add custom disposition as third element or keep it two elements if not
+     'Content-Disposition': ['form-data', 'name="' + field + '"'].concat(contentDisposition || []),
+     // if no content type. allow it to be empty array
+@@ -215,7 +215,7 @@ FormData.prototype._multiPartHeader = function(field, value, options) {
+   return '--' + this.getBoundary() + FormData.LINE_BREAK + contents + FormData.LINE_BREAK;
+ };
+ 
+-FormData.prototype._getContentDisposition = function(value, options) {
++FormData.prototype._getContentDisposition = function (value, options) {
+ 
+   var filename
+     , contentDisposition
+@@ -241,7 +241,7 @@ FormData.prototype._getContentDisposition = function(value, options) {
+   return contentDisposition;
+ };
+ 
+-FormData.prototype._getContentType = function(value, options) {
++FormData.prototype._getContentType = function (value, options) {
+ 
+   // use custom content-type above all
+   var contentType = options.contentType;
+@@ -274,8 +274,8 @@ FormData.prototype._getContentType = function(value, options) {
+   return contentType;
+ };
+ 
+-FormData.prototype._multiPartFooter = function() {
+-  return function(next) {
++FormData.prototype._multiPartFooter = function () {
++  return function (next) {
+     var footer = FormData.LINE_BREAK;
+ 
+     var lastPart = (this._streams.length === 0);
+@@ -287,11 +287,11 @@ FormData.prototype._multiPartFooter = function() {
+   }.bind(this);
+ };
+ 
+-FormData.prototype._lastBoundary = function() {
++FormData.prototype._lastBoundary = function () {
+   return '--' + this.getBoundary() + '--' + FormData.LINE_BREAK;
+ };
+ 
+-FormData.prototype.getHeaders = function(userHeaders) {
++FormData.prototype.getHeaders = function (userHeaders) {
+   var header;
+   var formHeaders = {
+     'content-type': 'multipart/form-data; boundary=' + this.getBoundary()
+@@ -306,11 +306,11 @@ FormData.prototype.getHeaders = function(userHeaders) {
+   return formHeaders;
+ };
+ 
+-FormData.prototype.setBoundary = function(boundary) {
++FormData.prototype.setBoundary = function (boundary) {
+   this._boundary = boundary;
+ };
+ 
+-FormData.prototype.getBoundary = function() {
++FormData.prototype.getBoundary = function () {
+   if (!this._boundary) {
+     this._generateBoundary();
+   }
+@@ -318,8 +318,8 @@ FormData.prototype.getBoundary = function() {
+   return this._boundary;
+ };
+ 
+-FormData.prototype.getBuffer = function() {
+-  var dataBuffer = new Buffer.alloc( 0 );
++FormData.prototype.getBuffer = function () {
++  var dataBuffer = new Buffer.alloc(0);
+   var boundary = this.getBoundary();
+ 
+   // Create the form content. Add Line breaks to the end of data.
+@@ -327,24 +327,24 @@ FormData.prototype.getBuffer = function() {
+     if (typeof this._streams[i] !== 'function') {
+ 
+       // Add content to the buffer.
+-      if(Buffer.isBuffer(this._streams[i])) {
+-        dataBuffer = Buffer.concat( [dataBuffer, this._streams[i]]);
+-      }else {
+-        dataBuffer = Buffer.concat( [dataBuffer, Buffer.from(this._streams[i])]);
++      if (Buffer.isBuffer(this._streams[i])) {
++        dataBuffer = Buffer.concat([dataBuffer, this._streams[i]]);
++      } else {
++        dataBuffer = Buffer.concat([dataBuffer, Buffer.from(this._streams[i])]);
+       }
+ 
+       // Add break after content.
+-      if (typeof this._streams[i] !== 'string' || this._streams[i].substring( 2, boundary.length + 2 ) !== boundary) {
+-        dataBuffer = Buffer.concat( [dataBuffer, Buffer.from(FormData.LINE_BREAK)] );
++      if (typeof this._streams[i] !== 'string' || this._streams[i].substring(2, boundary.length + 2) !== boundary) {
++        dataBuffer = Buffer.concat([dataBuffer, Buffer.from(FormData.LINE_BREAK)]);
+       }
+     }
+   }
+ 
+   // Add the footer and return the Buffer object.
+-  return Buffer.concat( [dataBuffer, Buffer.from(this._lastBoundary())] );
++  return Buffer.concat([dataBuffer, Buffer.from(this._lastBoundary())]);
+ };
+ 
+-FormData.prototype._generateBoundary = function() {
++FormData.prototype._generateBoundary = function () {
+   // This generates a 50 character boundary similar to those used by Firefox.
+   // They are optimized for boyer-moore parsing.
+   var boundary = '--------------------------';
+@@ -358,7 +358,7 @@ FormData.prototype._generateBoundary = function() {
+ // Note: getLengthSync DOESN'T calculate streams length
+ // As workaround one can calculate file size manually
+ // and add it as knownLength option
+-FormData.prototype.getLengthSync = function() {
++FormData.prototype.getLengthSync = function () {
+   var knownLength = this._overheadLength + this._valueLength;
+ 
+   // Don't get confused, there are 3 "internal" streams for each keyval pair
+@@ -381,7 +381,7 @@ FormData.prototype.getLengthSync = function() {
+ // Public API to check if length of added values is known
+ // https://github.com/form-data/form-data/issues/196
+ // https://github.com/form-data/form-data/issues/262
+-FormData.prototype.hasKnownLength = function() {
++FormData.prototype.hasKnownLength = function () {
+   var hasKnownLength = true;
+ 
+   if (this._valuesToMeasure.length) {
+@@ -391,7 +391,7 @@ FormData.prototype.hasKnownLength = function() {
+   return hasKnownLength;
+ };
+ 
+-FormData.prototype.getLength = function(cb) {
++FormData.prototype.getLength = function (cb) {
+   var knownLength = this._overheadLength + this._valueLength;
+ 
+   if (this._streams.length) {
+@@ -403,13 +403,13 @@ FormData.prototype.getLength = function(cb) {
+     return;
+   }
+ 
+-  asynckit.parallel(this._valuesToMeasure, this._lengthRetriever, function(err, values) {
++  asynckit.parallel(this._valuesToMeasure, this._lengthRetriever, function (err, values) {
+     if (err) {
+       cb(err);
+       return;
+     }
+ 
+-    values.forEach(function(length) {
++    values.forEach(function (length) {
+       knownLength += length;
+     });
+ 
+@@ -417,10 +417,10 @@ FormData.prototype.getLength = function(cb) {
+   });
+ };
+ 
+-FormData.prototype.submit = function(params, cb) {
++FormData.prototype.submit = function (params, cb) {
+   var request
+     , options
+-    , defaults = {method: 'post'}
++    , defaults = { method: 'post' }
+     ;
+ 
+   // parse provided url if it's string
+@@ -435,7 +435,7 @@ FormData.prototype.submit = function(params, cb) {
+       protocol: params.protocol
+     }, defaults);
+ 
+-  // use custom params
++    // use custom params
+   } else {
+ 
+     options = populate(params, defaults);
+@@ -456,7 +456,7 @@ FormData.prototype.submit = function(params, cb) {
+   }
+ 
+   // get content length and fire away
+-  this.getLength(function(err, length) {
++  this.getLength(function (err, length) {
+     if (err && err !== 'Unknown stream') {
+       this._error(err);
+       return;
+@@ -488,7 +488,7 @@ FormData.prototype.submit = function(params, cb) {
+   return request;
+ };
+ 
+-FormData.prototype._error = function(err) {
++FormData.prototype._error = function (err) {
+   if (!this.error) {
+     this.error = err;
+     this.pause();
