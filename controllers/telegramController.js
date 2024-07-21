@@ -53,6 +53,8 @@ exports.uploadFile = asyncHandler(async (req, res) => {
   formData.pipe(request);
 });
 
+//Downloading is currently broken sometimes working sometimes don't'
+
 exports.downloadFile = asyncHandler(async (req, res) => {
   const fileId = req.query.fileId; // Get the file ID from the request parameters
   console.log("Received fileId:", fileId);
