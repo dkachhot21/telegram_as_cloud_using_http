@@ -1,12 +1,16 @@
 const express = require("express");
 const router = express.Router();
-const telegramController = require("../controllers/telegramController");
+const {
+  uploadFile,
+  downloadFile,
+  renderForm,
+} = require("../controllers/telegramController");
 const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
 
 // Routes
-router.get("/", telegramController.renderForm);
-router.post("/upload", upload.single("file"), telegramController.uploadFile);
-router.get("/download", telegramController.downloadFile);
+router.get("/", renderForm);
+router.post("/upload", upload.single("file"), uploadFile);
+router.get("/download", downloadFile);
 
 module.exports = router;

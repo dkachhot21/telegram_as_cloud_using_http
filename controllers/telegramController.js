@@ -1,18 +1,32 @@
-const http = require("http");
+const axios = require("axios");
+const axiosRetry = require("axios-retry").default;
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const FormData = require("form-data");
 const { PassThrough } = require("stream");
 const asyncHandler = require("express-async-handler");
-require("dotenv").config();
+const dotenv = require("dotenv").config();
 
 const botToken = process.env.API_TOKEN;
 const channelId = process.env.CHAT_ID;
 
 console.log(`token ${botToken}, ID ${channelId}`);
 
-exports.uploadFile = asyncHandler(async (req, res) => {
+// Configure axios to retry requests on failure
+axiosRetry(axios, {
+  retries: 3, // Number of retries
+  retryDelay: axiosRetry.exponentialDelay, // Use exponential backoff
+  retryCondition: (error) => {
+    // Retry on network errors or 5xx server errors
+    return (
+      axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+      error.response.status >= 500
+    );
+  },
+});
+
+const uploadFile = asyncHandler(async (req, res) => {
   const file = req.file;
   const filePath = path.join(__dirname, "..", "uploads", file.filename);
 
@@ -55,7 +69,7 @@ exports.uploadFile = asyncHandler(async (req, res) => {
 
 //Downloading is currently broken sometimes working sometimes don't'
 
-exports.downloadFile = asyncHandler(async (req, res) => {
+const downloadFile = asyncHandler(async (req, res) => {
   const fileId = req.query.fileId; // Get the file ID from the request parameters
   console.log("Received fileId:", fileId);
 
@@ -63,95 +77,62 @@ exports.downloadFile = asyncHandler(async (req, res) => {
   const fileInfoUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
   console.log("Requesting file info from:", fileInfoUrl);
 
-  // Request to get file info
-  const fileInfo = await new Promise((resolve, reject) => {
-    const req = https.get(fileInfoUrl, { timeout: 10000 }, (response) => {
-      // Set timeout to 10 seconds
-      let data = "";
-      response.on("data", (chunk) => {
-        data += chunk;
-      });
-      response.on("end", () => {
-        try {
-          const parsedData = JSON.parse(data);
-          console.log("File info response:", parsedData);
-          if (parsedData.ok) {
-            resolve(parsedData.result);
-          } else {
-            reject(new Error(`Telegram API error: ${parsedData.description}`));
-          }
-        } catch (err) {
-          reject(err);
+  try {
+    // Request to get file info
+    const fileInfoResponse = await axios.get(fileInfoUrl, { timeout: 10000 });
+    const fileInfo = fileInfoResponse.data;
+
+    if (!fileInfo.ok) {
+      throw new Error(`Telegram API error: ${fileInfo.description}`);
+    }
+
+    const filePath = fileInfo.result.file_path;
+    const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    console.log("File URL:", url);
+
+    const downloadPath = path.join(__dirname, "..", path.basename(filePath));
+    console.log("Downloading to:", downloadPath);
+
+    // Request to download the file
+    const response = await axios({
+      url,
+      method: "GET",
+      responseType: "stream",
+      timeout: 100000,
+    });
+
+    // Create a write stream to save the file
+    const fileWriteStream = fs.createWriteStream(downloadPath);
+
+    response.data.pipe(fileWriteStream);
+
+    fileWriteStream.on("finish", () => {
+      res.download(downloadPath, (err) => {
+        if (err) {
+          res
+            .status(500)
+            .json({ message: "Failed to download file", error: err.message });
+        } else {
+          fs.unlinkSync(downloadPath); // Delete the file after download
         }
       });
     });
-    req.on("error", (err) => {
-      reject(err);
-    });
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Request timed out"));
-    });
-  });
 
-  const filePath = fileInfo.file_path;
-  const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-  console.log("File URL:", url);
-
-  // Request to download the file
-  const fileStream = await new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 100000 }, (response) => {
-      // Set timeout to 10 seconds
-      if (response.statusCode === 200) {
-        resolve(response);
-      } else {
-        reject(
-          new Error(
-            `Failed to download file. Status Code: ${response.statusCode}`,
-          ),
-        );
-      }
+    fileWriteStream.on("error", (err) => {
+      res
+        .status(500)
+        .json({ message: "Failed to save file", error: err.message });
     });
-    req.on("error", (err) => {
-      reject(err);
-    });
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Request timed out"));
-    });
-  });
-
-  const downloadPath = path.join(
-    __dirname,
-    "..",
-    "downloads",
-    path.basename(filePath),
-  );
-  console.log("Downloading to:", downloadPath);
-
-  // Create a write stream to save the file
-  const fileWriteStream = fs.createWriteStream(downloadPath);
-  fileStream.pipe(fileWriteStream);
-
-  fileWriteStream.on("finish", () => {
-    res.download(downloadPath, (err) => {
-      if (err) {
-        res
-          .status(500)
-          .json({ message: "Failed to download file", error: err.message });
-      } else {
-        fs.unlinkSync(downloadPath); // Delete the file after download
-      }
-    });
-  });
-
-  fileWriteStream.on("error", (err) => {
+  } catch (err) {
+    console.error("Error downloading file:", err);
     res
       .status(500)
-      .json({ message: "Failed to save file", error: err.message });
-  });
+      .json({ message: "Failed to download file", error: err.message });
+  }
 });
 
-exports.renderForm = (req, res) => {
+const renderForm = (req, res) => {
   res.render("index");
 };
+
+module.exports = { uploadFile, downloadFile, renderForm };
