@@ -9,7 +9,6 @@ const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
 const {
   encryptFileMiddleware,
-  decryptFileMiddleware,
 } = require("../middlewares/encryptionMiddleware");
 
 // Routes
