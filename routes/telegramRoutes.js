@@ -7,10 +7,19 @@ const {
 } = require("../controllers/telegramController");
 const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
+const {
+  encryptFileMiddleware,
+  decryptFileMiddleware,
+} = require("../middlewares/encryptionMiddleware");
 
 // Routes
 router.get("/", renderForm);
-router.post("/upload", upload.single("file"), uploadFile);
+router.post(
+  "/upload",
+  upload.single("file"),
+  encryptFileMiddleware,
+  uploadFile,
+);
 router.get("/download", downloadFile);
 
 module.exports = router;

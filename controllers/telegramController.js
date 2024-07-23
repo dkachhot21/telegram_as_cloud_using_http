@@ -1,18 +1,17 @@
+// controllers/telegramController.js
 const axios = require("axios");
 const axiosRetry = require("axios-retry").default;
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const FormData = require("form-data");
-const { PassThrough } = require("stream");
 const asyncHandler = require("express-async-handler");
-const { log } = require("console");
-const dotenv = require("dotenv").config();
+const {
+  decryptFileMiddleware,
+} = require("../middlewares/encryptionMiddleware");
 
 const botToken = process.env.API_TOKEN;
 const channelId = process.env.CHAT_ID;
-
-console.log(`token ${botToken}, ID ${channelId}`);
 
 // Configure axios to retry requests on failure
 axiosRetry(axios, {
@@ -29,10 +28,12 @@ axiosRetry(axios, {
 
 const uploadFile = asyncHandler(async (req, res) => {
   const file = req.file;
-  const filePath = path.join(__dirname, "..", "uploads", file.filename);
+  const encryptedFilePath = req.encryptedFilePath;
+  const originalFilePath = req.originalFilePath;
+
   const formData = new FormData();
   formData.append("chat_id", channelId);
-  formData.append("document", fs.createReadStream(filePath));
+  formData.append("document", fs.createReadStream(encryptedFilePath));
   const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
   const maxRetries = 3;
   let attempts = 0;
@@ -41,7 +42,7 @@ const uploadFile = asyncHandler(async (req, res) => {
     attempts += 1;
     const formData = new FormData();
     formData.append("chat_id", channelId);
-    formData.append("document", fs.createReadStream(filePath));
+    formData.append("document", fs.createReadStream(encryptedFilePath));
 
     const options = {
       method: "POST",
@@ -56,23 +57,25 @@ const uploadFile = asyncHandler(async (req, res) => {
         data += chunk;
       });
       response.on("end", () => {
-        fs.unlinkSync(filePath); // Delete the file after upload
+        // Delete the files after upload
+        fs.unlinkSync(originalFilePath);
+        fs.unlinkSync(encryptedFilePath);
+
         data = JSON.parse(data);
         if (data.ok) {
           const file_id = data.result.document.file_id;
           res.status(200).json({
             message: "File uploaded successfully",
+            file_name: file.originalname,
             file_id: file_id,
           });
         } else {
           if (attempts < maxRetries) {
             upload(); // Retry upload
           } else {
-            res
-              .status(500)
-              .json({
-                message: "Failed to upload file after multiple attempts",
-              });
+            res.status(500).json({
+              message: "Failed to upload file after multiple attempts",
+            });
           }
         }
       });
@@ -94,9 +97,7 @@ const uploadFile = asyncHandler(async (req, res) => {
   upload();
 });
 
-//Downloading is currently broken sometimes working sometimes don't'
-
-const downloadFile = asyncHandler(async (req, res) => {
+const downloadEncryptedFile = asyncHandler(async (req, res, next) => {
   const fileId = req.query.fileId; // Get the file ID from the request parameters
   console.log("Received fileId:", fileId);
 
@@ -117,8 +118,13 @@ const downloadFile = asyncHandler(async (req, res) => {
     const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
     console.log("File URL:", url);
 
-    const downloadPath = path.join(__dirname, "..", path.basename(filePath));
-    console.log("Downloading to:", downloadPath);
+    const encryptedDownloadPath = path.join(
+      __dirname,
+      "..",
+      path.basename(filePath),
+    );
+
+    console.log("Downloading to:", encryptedDownloadPath);
 
     // Request to download the file
     const response = await axios({
@@ -128,21 +134,14 @@ const downloadFile = asyncHandler(async (req, res) => {
       timeout: 100000,
     });
 
-    // Create a write stream to save the file
-    const fileWriteStream = fs.createWriteStream(downloadPath);
+    // Create a write stream to save the encrypted file
+    const fileWriteStream = fs.createWriteStream(encryptedDownloadPath);
 
     response.data.pipe(fileWriteStream);
 
     fileWriteStream.on("finish", () => {
-      res.download(downloadPath, (err) => {
-        if (err) {
-          res
-            .status(500)
-            .json({ message: "Failed to download file", error: err.message });
-        } else {
-          fs.unlinkSync(downloadPath); // Delete the file after download
-        }
-      });
+      req.encryptedFilePath = encryptedDownloadPath;
+      next();
     });
 
     fileWriteStream.on("error", (err) => {
@@ -158,8 +157,32 @@ const downloadFile = asyncHandler(async (req, res) => {
   }
 });
 
+// Ensure that downloadFile also handles decryption
+const downloadFile = [
+  downloadEncryptedFile,
+  decryptFileMiddleware,
+  (req, res) => {
+    const decryptedFilePath = req.decryptedFilePath;
+
+    // Send the decrypted file to the client
+    res.download(decryptedFilePath, (err) => {
+      if (err) {
+        res
+          .status(500)
+          .json({ message: "Failed to download file", error: err.message });
+      } else {
+        fs.unlinkSync(decryptedFilePath); // Delete the file after download
+      }
+    });
+  },
+];
+
 const renderForm = (req, res) => {
   res.render("index");
 };
 
-module.exports = { uploadFile, downloadFile, renderForm };
+module.exports = {
+  uploadFile,
+  downloadFile,
+  renderForm,
+};

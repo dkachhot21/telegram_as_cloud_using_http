@@ -1,6 +1,5 @@
 const express = require("express");
 const telegramRoutes = require("./routes/telegramRoutes");
-const dotenv = require("dotenv").config();
 const app = express();
 
 app.use(express.json());
