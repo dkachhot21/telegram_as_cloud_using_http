@@ -6,6 +6,7 @@ const path = require("path");
 const FormData = require("form-data");
 const { PassThrough } = require("stream");
 const asyncHandler = require("express-async-handler");
+const { log } = require("console");
 const dotenv = require("dotenv").config();
 
 const botToken = process.env.API_TOKEN;
@@ -29,42 +30,68 @@ axiosRetry(axios, {
 const uploadFile = asyncHandler(async (req, res) => {
   const file = req.file;
   const filePath = path.join(__dirname, "..", "uploads", file.filename);
-
   const formData = new FormData();
   formData.append("chat_id", channelId);
   formData.append("document", fs.createReadStream(filePath));
-
-  const options = {
-    method: "POST",
-    headers: {
-      ...formData.getHeaders(),
-    },
-    body: formData,
-  };
-
   const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
+  const maxRetries = 3;
+  let attempts = 0;
 
-  const request = https.request(url, options, (response) => {
-    let data = "";
-    response.on("data", (chunk) => {
-      data += chunk;
-    });
-    response.on("end", () => {
-      fs.unlinkSync(filePath); // Delete the file after upload
-      res.status(200).json({
-        message: "File uploaded successfully",
-        data: JSON.parse(data),
+  const upload = () => {
+    attempts += 1;
+    const formData = new FormData();
+    formData.append("chat_id", channelId);
+    formData.append("document", fs.createReadStream(filePath));
+
+    const options = {
+      method: "POST",
+      headers: {
+        ...formData.getHeaders(),
+      },
+    };
+
+    const request = https.request(url, options, (response) => {
+      let data = "";
+      response.on("data", (chunk) => {
+        data += chunk;
+      });
+      response.on("end", () => {
+        fs.unlinkSync(filePath); // Delete the file after upload
+        data = JSON.parse(data);
+        if (data.ok) {
+          const file_id = data.result.document.file_id;
+          res.status(200).json({
+            message: "File uploaded successfully",
+            file_id: file_id,
+          });
+        } else {
+          if (attempts < maxRetries) {
+            upload(); // Retry upload
+          } else {
+            res
+              .status(500)
+              .json({
+                message: "Failed to upload file after multiple attempts",
+              });
+          }
+        }
       });
     });
-  });
 
-  request.on("error", (error) => {
-    res
-      .status(500)
-      .json({ message: "Failed to upload file", error: error.message });
-  });
+    request.on("error", (error) => {
+      if (attempts < maxRetries) {
+        upload(); // Retry upload
+      } else {
+        res
+          .status(500)
+          .json({ message: "Failed to upload file", error: error.message });
+      }
+    });
 
-  formData.pipe(request);
+    formData.pipe(request);
+  };
+
+  upload();
 });
 
 //Downloading is currently broken sometimes working sometimes don't'
